@@ -129,6 +129,15 @@ locals {
   ]
 }
 
+resource "aws_efs_file_system" "fs" {
+  count = var.create_efs_volume ? 1 : 0 
+  creation_token = "${var.name_prefix}-efs"
+
+  tags = {
+    Name = "${var.name_prefix}-efs"
+  }
+}
+
 resource "aws_ecs_task_definition" "task" {
   family                   = var.name_prefix
   execution_role_arn       = aws_iam_role.execution.arn
@@ -171,6 +180,16 @@ resource "aws_ecs_task_definition" "task" {
     "environment": ${jsonencode(local.task_environment)}
 }]
 EOF
+
+  volume {
+    name = "${var.name_prefix}-service-storage"
+    
+    efs_volume_configuration {
+      file_system_id = aws_efs_file_system.fs.id
+      root_directory = "/opt/data"
+    }
+
+  }
 }
 
 resource "aws_ecs_service" "service" {
@@ -207,7 +226,7 @@ resource "aws_ecs_service" "service" {
   dynamic "service_registries" {
     for_each = var.service_registry_arn == "" ? [] : [1]
     content {
-      registry_arn   = var.service_registry_arn
+      registry_arn = var.service_registry_arn
       // container_port = var.task_container_port
       container_name = var.container_name != "" ? var.container_name : var.name_prefix
     }
